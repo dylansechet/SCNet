@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import deque
 from .separation import SeparationNet
+from .utils import make_window
 import typing as tp
 import math
 
@@ -294,6 +295,7 @@ class SCNet(nn.Module):
         hop_size=1024,
         win_size=4096,
         normalized=True,
+        window="hann",
         # SD/SU layer
         band_SR=[0.175, 0.392, 0.433],
         band_stride=[1, 4, 16],
@@ -332,6 +334,7 @@ class SCNet(nn.Module):
             "center": True,
             "normalized": normalized,
         }
+        self.register_buffer("window", make_window(window, win_size))
 
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
@@ -377,7 +380,7 @@ class SCNet(nn.Module):
         # STFT
         L = x.shape[-1]
         x = x.reshape(-1, L)
-        x = torch.stft(x, **self.stft_config, return_complex=True)
+        x = torch.stft(x, **self.stft_config, window=self.window, return_complex=True)
         x = torch.view_as_real(x)
         x = x.permute(0, 3, 1, 2).reshape(
             x.shape[0] // self.audio_channels,
@@ -415,7 +418,7 @@ class SCNet(nn.Module):
         x = x * std[:, None] + mean[:, None]
         x = x.reshape(-1, 2, Fr, T).permute(0, 2, 3, 1)
         x = torch.view_as_complex(x.contiguous())
-        x = torch.istft(x, **self.stft_config)
+        x = torch.istft(x, **self.stft_config, window=self.window)
         x = x.reshape(B, len(self.sources), self.audio_channels, -1)
 
         x = x[:, :, :, :-padding]

@@ -12,6 +12,16 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+_WINDOW_FNS = {"hann": torch.hann_window, "hamming": torch.hamming_window}
+
+def make_window(window: str, size: int, **kwargs) -> torch.Tensor:
+    if window in _WINDOW_FNS:
+        return _WINDOW_FNS[window](size, **kwargs)
+    if window == "rectangular":
+        return torch.ones(size, **kwargs)
+    raise ValueError(f"Unknown window type '{window}'. Choose from: hann, hamming, rectangular.")
+
+
 # Audio
 def convert_audio_channels(wav, channels=2):
     """Convert audio to the given number of channels."""

@@ -1,6 +1,6 @@
 import torch
 from pathlib import Path
-from .utils import copy_state, EMA, new_sdr
+from .utils import copy_state, EMA, new_sdr, make_window
 from .apply import apply_model
 from .ema import ModelEMA
 from . import augment
@@ -26,12 +26,14 @@ class Solver(object):
         self.accelerator = Accelerator()
         self.scaler = GradScaler()
 
+        win_size = config.model.win_size
         self.stft_config = {
             "n_fft": config.model.nfft,
             "hop_length": config.model.hop_size,
-            "win_length": config.model.win_size,
+            "win_length": win_size,
             "center": True,
             "normalized": config.model.normalized,
+            "window": make_window(getattr(config.model, "window", "hann"), win_size, device=self.device),
         }
         # Exponential moving average of the model
         self.emas = {"batch": [], "epoch": []}

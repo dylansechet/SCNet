@@ -1,6 +1,6 @@
 
 data:
-  wav: /root/autodl-tmp/musdbhq
+  wav: /home/dylan/Data/musdb18hq
   samplerate: 44100
   segment: 11
   shift: 1
@@ -23,6 +23,7 @@ model:
   hop_size: 1024
   win_size: 4096
   normalized: True
+  window: hann  # hann, hamming, or rectangular
   # SD/SU layer
   band_SR: [0.175, 0.392, 0.433]     
   band_stride: [1, 4, 16]             
