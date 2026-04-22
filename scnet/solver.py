@@ -225,7 +225,7 @@ class Solver(object):
 
             losses = {}
 
-            losses["loss"] = loss
+            losses["loss"] = loss.detach()
             if not train:
                 nsdrs = new_sdr(sources, estimate.detach()).mean(0)
                 nsdrs = self.accelerator.reduce(nsdrs, reduction="mean")
