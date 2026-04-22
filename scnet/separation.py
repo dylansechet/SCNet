@@ -23,7 +23,7 @@ class FeatureConversion(nn.Module):
             x = x.float()
             x_r = x[:, : self.channels // 2, :, :]
             x_i = x[:, self.channels // 2 :, :, :]
-            x = torch.complex(x_r, x_i)
+            x = torch.view_as_complex(torch.stack([x_r, x_i], dim=-1))
             x = torch.fft.irfft(x, dim=3, norm="ortho")
         else:
             x = x.float()
