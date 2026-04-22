@@ -236,13 +236,13 @@ class Solver(object):
             if train:
                 scaled_loss = self.scaler.scale(loss)
                 self.accelerator.backward(scaled_loss)
-                grad_norm = 0
-                grads = []
-                for p in self.model.parameters():
-                    if p.grad is not None:
-                        grad_norm += p.grad.data.norm() ** 2
-                        grads.append(p.grad.data)
-                losses["grad"] = grad_norm**0.5
+                self.scaler.unscale_(self.optimizer)
+                grad_norm = sum(
+                    p.grad.data.norm() ** 2
+                    for p in self.model.parameters()
+                    if p.grad is not None
+                )
+                losses["grad"] = grad_norm ** 0.5
 
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
