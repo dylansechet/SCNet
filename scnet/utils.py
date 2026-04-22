@@ -11,10 +11,16 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 # Audio
 def convert_audio_channels(wav, channels=2):
     """Convert audio to the given number of channels."""
-    logger.debug("Input tensor shape: %s, ndim: %d, requested channels: %d", wav.shape, wav.ndim, channels)
+    logger.debug(
+        "Input tensor shape: %s, ndim: %d, requested channels: %d",
+        wav.shape,
+        wav.ndim,
+        channels,
+    )
 
     # Handle 1D arrays (samples only, no channel dimension)
     if wav.ndim == 1:
@@ -24,11 +30,15 @@ def convert_audio_channels(wav, channels=2):
     elif wav.ndim == 2:
         # Standard case: [channels, samples]
         src_channels = wav.shape[0]
-        logger.debug("2D tensor with %d channels and %d samples", src_channels, wav.shape[1])
+        logger.debug(
+            "2D tensor with %d channels and %d samples", src_channels, wav.shape[1]
+        )
     else:
         # Multi-dimensional case like [batch, channels, samples] or [sources, channels, samples]
         src_channels = wav.shape[-2]  # Assume channel dim is second to last
-        logger.debug("Multi-dim tensor with shape %s, src_channels=%d", wav.shape, src_channels)
+        logger.debug(
+            "Multi-dim tensor with shape %s, src_channels=%d", wav.shape, src_channels
+        )
 
     # No change needed if already correct number of channels
     if src_channels == channels:
@@ -40,9 +50,13 @@ def convert_audio_channels(wav, channels=2):
         if src_channels > 1:
             logger.debug("Converting to mono by averaging channels")
             if wav.ndim == 2:
-                return wav.mean(dim=0, keepdim=True)  # Average channels: [C, S] -> [1, S]
+                return wav.mean(
+                    dim=0, keepdim=True
+                )  # Average channels: [C, S] -> [1, S]
             else:
-                return wav.mean(dim=-2, keepdim=True)  # Keep original dimension structure
+                return wav.mean(
+                    dim=-2, keepdim=True
+                )  # Keep original dimension structure
         return wav  # Already mono
 
     # Handle mono to multi-channel expansion (upmixing from 1 channel)
@@ -71,7 +85,9 @@ def convert_audio_channels(wav, channels=2):
     # Process in batches to avoid memory issues
     if wav.ndim == 2:
         # 2D case: [src_channels, samples] -> [channels, samples]
-        result = torch.zeros((channels, wav.shape[1]), device=wav.device, dtype=wav.dtype)
+        result = torch.zeros(
+            (channels, wav.shape[1]), device=wav.device, dtype=wav.dtype
+        )
         for i in range(channels):
             result[i] = wav[i % src_channels]  # Cyclically map channels
     else:
@@ -83,9 +99,14 @@ def convert_audio_channels(wav, channels=2):
         logger.debug("Creating result tensor with shape %s", result_shape)
 
         # Check if tensor would be too large (arbitrary threshold of 1GB)
-        tensor_size_bytes = torch.tensor([], dtype=wav.dtype).element_size() * np.prod(result_shape)
+        tensor_size_bytes = torch.tensor([], dtype=wav.dtype).element_size() * np.prod(
+            result_shape
+        )
         if tensor_size_bytes > 1e9:  # 1GB
-            logger.debug("Large tensor detected (%.2f GB), processing in CPU", tensor_size_bytes / 1e9)
+            logger.debug(
+                "Large tensor detected (%.2f GB), processing in CPU",
+                tensor_size_bytes / 1e9,
+            )
             # Process on CPU to avoid GPU memory issues
             cpu_wav = wav.cpu()
             result = torch.zeros(result_shape, dtype=cpu_wav.dtype)
@@ -96,14 +117,15 @@ def convert_audio_channels(wav, channels=2):
             result = torch.zeros(result_shape, device=wav.device, dtype=wav.dtype)
             for i in range(channels):
                 result[..., i, :] = wav[..., i % src_channels, :]
-    
+
     return result
+
 
 def convert_audio(wav, from_samplerate, to_samplerate, channels):
     """Convert audio from a given samplerate to a target one and target number of channels."""
     # Convert channels first
     wav = convert_audio_channels(wav, channels)
-    
+
     # Resample audio if necessary
     if from_samplerate != to_samplerate:
         wav = julius.resample_frac(wav, from_samplerate, to_samplerate)
@@ -112,29 +134,33 @@ def convert_audio(wav, from_samplerate, to_samplerate, channels):
 
 # model
 def load_model(model, checkpoint_path):
-        checkpoint_path = Path(checkpoint_path)
+    checkpoint_path = Path(checkpoint_path)
 
-        if not checkpoint_path.exists():
-            raise FileNotFoundError("No model checkpoint file found at " + str(checkpoint_path))
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(
+            "No model checkpoint file found at " + str(checkpoint_path)
+        )
 
-        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
 
-        if 'best_state' not in checkpoint:
-            raise KeyError("Checkpoint does not contain the state")
-            
-        state_dict = checkpoint['best_state']
-        new_state_dict = {}
-        for k, v in state_dict.items():
-            if k.startswith('module.'):
-               new_state_dict[k[7:]] = v
-            else:
-               new_state_dict[k] = v
+    if "best_state" not in checkpoint:
+        raise KeyError("Checkpoint does not contain the state")
 
-        model.load_state_dict(new_state_dict)
-        return model
+    state_dict = checkpoint["best_state"]
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        if k.startswith("module."):
+            new_state_dict[k[7:]] = v
+        else:
+            new_state_dict[k] = v
+
+    model.load_state_dict(new_state_dict)
+    return model
+
 
 def copy_state(state):
     return {k: v.cpu().clone() for k, v in state.items()}
+
 
 @contextmanager
 def swap_state(model, state):
@@ -153,7 +179,8 @@ def swap_state(model, state):
     finally:
         model.load_state_dict(old_state)
 
-#other
+
+# other
 @contextmanager
 def temp_filenames(count: int, delete=True):
     names = []
@@ -165,6 +192,7 @@ def temp_filenames(count: int, delete=True):
         if delete:
             for name in names:
                 os.unlink(name)
+
 
 def center_trim(tensor: torch.Tensor, reference: tp.Union[torch.Tensor, int]):
     """
@@ -179,10 +207,11 @@ def center_trim(tensor: torch.Tensor, reference: tp.Union[torch.Tensor, int]):
         ref_size = reference
     delta = tensor.size(-1) - ref_size
     if delta < 0:
-        raise ValueError("tensor must be larger than reference. " f"Delta is {delta}.")
+        raise ValueError(f"tensor must be larger than reference. Delta is {delta}.")
     if delta:
-        tensor = tensor[..., delta // 2:-(delta - delta // 2)]
+        tensor = tensor[..., delta // 2 : -(delta - delta // 2)]
     return tensor
+
 
 def EMA(beta: float = 1):
     """
@@ -202,7 +231,9 @@ def EMA(beta: float = 1):
             total[key] = total[key] * beta + weight * float(value)
             fix[key] = fix[key] * beta + weight
         return {key: tot / fix[key] for key, tot in total.items()}
+
     return _update
+
 
 class DummyPoolExecutor:
     class DummyResult:
@@ -226,6 +257,7 @@ class DummyPoolExecutor:
     def __exit__(self, exc_type, exc_value, exc_tb):
         return
 
+
 # metric
 def new_sdr(references, estimates):
     """
@@ -240,5 +272,3 @@ def new_sdr(references, estimates):
     den += delta
     scores = 10 * torch.log10(num / den)
     return scores
-
-

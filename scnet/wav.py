@@ -1,4 +1,4 @@
-#From HT demucs https://github.com/facebookresearch/demucs/tree/release_v4?tab=readme-ov-file
+# From HT demucs https://github.com/facebookresearch/demucs/tree/release_v4?tab=readme-ov-file
 
 from collections import OrderedDict
 import hashlib
@@ -44,11 +44,13 @@ def _track_metadata(track, sources, normalize=True, ext=EXT):
         elif track_length != length:
             raise ValueError(
                 f"Invalid length for file {file}: "
-                f"expecting {track_length} but got {length}.")
+                f"expecting {track_length} but got {length}."
+            )
         elif info.sample_rate != track_samplerate:
             raise ValueError(
                 f"Invalid sample rate for file {file}: "
-                f"expecting {track_samplerate} but got {info.sample_rate}.")
+                f"expecting {track_samplerate} but got {info.sample_rate}."
+            )
         if source == MIXTURE and normalize:
             try:
                 wav, _ = ta.load(str(file))
@@ -78,13 +80,16 @@ def build_metadata(path, sources, normalize=True, ext=EXT):
     path = Path(path)
     pendings = []
     from concurrent.futures import ThreadPoolExecutor
+
     with ThreadPoolExecutor(8) as pool:
         for root, folders, files in os.walk(path, followlinks=True):
             root = Path(root)
-            if root.name.startswith('.') or folders or root == path:
+            if root.name.startswith(".") or folders or root == path:
                 continue
             name = str(root.relative_to(path))
-            pendings.append((name, pool.submit(_track_metadata, root, sources, normalize, ext)))
+            pendings.append(
+                (name, pool.submit(_track_metadata, root, sources, normalize, ext))
+            )
             # meta[name] = _track_metadata(root, sources, normalize, ext)
         for name, pending in tqdm.tqdm(pendings, ncols=120):
             meta[name] = pending.result()
@@ -93,10 +98,17 @@ def build_metadata(path, sources, normalize=True, ext=EXT):
 
 class Wavset:
     def __init__(
-            self,
-            root, metadata, sources,
-            segment=None, shift=None, normalize=True,
-            samplerate=44100, channels=2, ext=EXT):
+        self,
+        root,
+        metadata,
+        sources,
+        segment=None,
+        shift=None,
+        normalize=True,
+        samplerate=44100,
+        channels=2,
+        ext=EXT,
+    ):
         """
         Waveset (or mp3 set for that matter). Can be used to train
         with arbitrary sources. Each track should be one folder inside of `path`.
@@ -129,11 +141,13 @@ class Wavset:
         self.ext = ext
         self.num_examples = []
         for name, meta in self.metadata.items():
-            track_duration = meta['length'] / meta['samplerate']
+            track_duration = meta["length"] / meta["samplerate"]
             if segment is None or track_duration < segment:
                 examples = 1
             else:
-                examples = int(math.ceil((track_duration - self.segment) / self.shift) + 1)
+                examples = int(
+                    math.ceil((track_duration - self.segment) / self.shift) + 1
+                )
             self.num_examples.append(examples)
 
     def __len__(self):
@@ -151,8 +165,8 @@ class Wavset:
             num_frames = -1
             offset = 0
             if self.segment is not None:
-                offset = int(meta['samplerate'] * self.shift * index)
-                num_frames = int(math.ceil(meta['samplerate'] * self.segment))
+                offset = int(meta["samplerate"] * self.shift * index)
+                num_frames = int(math.ceil(meta["samplerate"] * self.segment))
             wavs = []
             for source in self.sources:
                 file = self.get_file(name, source)
@@ -161,9 +175,9 @@ class Wavset:
                 wavs.append(wav)
 
             example = th.stack(wavs)
-            example = julius.resample_frac(example, meta['samplerate'], self.samplerate)
+            example = julius.resample_frac(example, meta["samplerate"], self.samplerate)
             if self.normalize:
-                example = (example - meta['mean']) / meta['std']
+                example = (example - meta["mean"]) / meta["std"]
             if self.segment:
                 length = int(self.segment * self.samplerate)
                 example = example[..., :length]
@@ -174,7 +188,7 @@ class Wavset:
 def get_wav_datasets(args):
     """Extract the wav datasets from the XP arguments."""
     sig = hashlib.sha1(str(args.wav).encode()).hexdigest()[:8]
-    metadata_file = Path(args.metadata) / ('wav_' + sig + ".json")
+    metadata_file = Path(args.metadata) / ("wav_" + sig + ".json")
     train_path = Path(args.wav) / "train"
     valid_path = Path(args.wav) / "valid"
     if not metadata_file.is_file() and accelerator.is_main_process:
@@ -187,14 +201,23 @@ def get_wav_datasets(args):
     train, valid = json.load(open(metadata_file))
     kw_cv = {}
 
-    train_set = Wavset(train_path, train, args.sources,
-                       segment=args.segment, shift=args.shift,
-                       samplerate=args.samplerate, channels=args.channels,
-                       normalize=args.normalize)
-    valid_set = Wavset(valid_path, valid, [MIXTURE] + list(args.sources),
-                       samplerate=args.samplerate, channels=args.channels,
-                       normalize=args.normalize, **kw_cv)
+    train_set = Wavset(
+        train_path,
+        train,
+        args.sources,
+        segment=args.segment,
+        shift=args.shift,
+        samplerate=args.samplerate,
+        channels=args.channels,
+        normalize=args.normalize,
+    )
+    valid_set = Wavset(
+        valid_path,
+        valid,
+        [MIXTURE] + list(args.sources),
+        samplerate=args.samplerate,
+        channels=args.channels,
+        normalize=args.normalize,
+        **kw_cv,
+    )
     return train_set, valid_set
-
-
-

@@ -1,4 +1,4 @@
-#From HT demucs https://github.com/facebookresearch/demucs/tree/release_v4?tab=readme-ov-file
+# From HT demucs https://github.com/facebookresearch/demucs/tree/release_v4?tab=readme-ov-file
 
 from contextlib import contextmanager
 import torch
@@ -14,7 +14,8 @@ class ModelEMA:
         with ema.swap():
             # compute valid metrics with averaged model.
     """
-    def __init__(self, model, decay=0.9999, unbias=True, device='cpu'):
+
+    def __init__(self, model, decay=0.9999, unbias=True, device="cpu"):
         self.decay = decay
         self.model = model
         self.state = {}
@@ -51,9 +52,9 @@ class ModelEMA:
             yield
 
     def state_dict(self):
-        return {'state': self.state, 'count': self.count}
+        return {"state": self.state, "count": self.count}
 
     def load_state_dict(self, state):
-        self.count = state['count']
-        for k, v in state['state'].items():
+        self.count = state["count"]
+        for k, v in state["state"].items():
             self.state[k].copy_(v)

@@ -11,7 +11,6 @@ from accelerate import Accelerator
 accelerator = Accelerator()
 
 
-
 class TensorChunk:
     def __init__(self, tensor, offset=0, length=None):
         total_length = tensor.shape[-1]
@@ -61,9 +60,20 @@ def tensor_chunk(tensor_or_chunk):
         return TensorChunk(tensor_or_chunk)
 
 
-def apply_model(model, mix, shifts=1, split=True, segment=20, samplerate=44100,
-                overlap=0.25, transition_power=1., progress=False, device=None,
-                num_workers=0, pool=None):
+def apply_model(
+    model,
+    mix,
+    shifts=1,
+    split=True,
+    segment=20,
+    samplerate=44100,
+    overlap=0.25,
+    transition_power=1.0,
+    progress=False,
+    device=None,
+    num_workers=0,
+    pool=None,
+):
     """
     Apply model to a given mixture.
 
@@ -83,18 +93,18 @@ def apply_model(model, mix, shifts=1, split=True, segment=20, samplerate=44100,
     """
     device = accelerator.device
     if pool is None:
-        if num_workers > 0 and device.type == 'cpu':
+        if num_workers > 0 and device.type == "cpu":
             pool = ThreadPoolExecutor(num_workers)
         else:
             pool = DummyPoolExecutor()
     kwargs = {
-        'shifts': shifts,
-        'split': split,
-        'overlap': overlap,
-        'transition_power': transition_power,
-        'progress': progress,
-        'device': device,
-        'pool': pool,
+        "shifts": shifts,
+        "split": split,
+        "overlap": overlap,
+        "transition_power": transition_power,
+        "progress": progress,
+        "device": device,
+        "pool": pool,
     }
     model = accelerator.unwrap_model(model)
     model.to(device)
@@ -102,19 +112,23 @@ def apply_model(model, mix, shifts=1, split=True, segment=20, samplerate=44100,
     assert transition_power >= 1, "transition_power < 1 leads to weird behavior."
     batch, channels, length = mix.shape
     if split:
-        kwargs['split'] = False
+        kwargs["split"] = False
         out = th.zeros(batch, len(model.sources), channels, length, device=mix.device)
         sum_weight = th.zeros(length, device=mix.device)
         segment = int(samplerate * segment)
         stride = int((1 - overlap) * segment)
         offsets = range(0, length, stride)
         scale = stride / samplerate
-        weight = th.cat([th.arange(1, segment // 2 + 1, device=device),
-                         th.arange(segment - segment // 2, 0, -1, device=device)])              
+        weight = th.cat(
+            [
+                th.arange(1, segment // 2 + 1, device=device),
+                th.arange(segment - segment // 2, 0, -1, device=device),
+            ]
+        )
         assert len(weight) == segment
         # If the overlap < 50%, this will translate to linear transition when
         # transition_power is 1.
-        weight = (weight / weight.max())**transition_power
+        weight = (weight / weight.max()) ** transition_power
         futures = []
         for offset in offsets:
             chunk = TensorChunk(mix, offset, segment)
@@ -122,17 +136,21 @@ def apply_model(model, mix, shifts=1, split=True, segment=20, samplerate=44100,
             futures.append((future, offset))
             offset += segment
         if progress:
-            futures = tqdm.tqdm(futures, unit_scale=scale, ncols=120, unit='seconds')
+            futures = tqdm.tqdm(futures, unit_scale=scale, ncols=120, unit="seconds")
         for future, offset in futures:
             chunk_out = future.result()
             chunk_length = chunk_out.shape[-1]
-            out[..., offset:offset + segment] += (weight[:chunk_length] * chunk_out).to(mix.device)
-            sum_weight[offset:offset + segment] += weight[:chunk_length].to(mix.device)
+            out[..., offset : offset + segment] += (
+                weight[:chunk_length] * chunk_out
+            ).to(mix.device)
+            sum_weight[offset : offset + segment] += weight[:chunk_length].to(
+                mix.device
+            )
         assert sum_weight.min() > 0
         out /= sum_weight
         return out
     elif shifts:
-        kwargs['shifts'] = 0
+        kwargs["shifts"] = 0
         max_shift = int(0.5 * samplerate)
         mix = tensor_chunk(mix)
         padded_mix = mix.padded(length + 2 * max_shift)
@@ -141,7 +159,7 @@ def apply_model(model, mix, shifts=1, split=True, segment=20, samplerate=44100,
             offset = random.randint(0, max_shift)
             shifted = TensorChunk(padded_mix, offset, length + max_shift - offset)
             shifted_out = apply_model(model, shifted, **kwargs)
-            out += shifted_out[..., max_shift - offset:]
+            out += shifted_out[..., max_shift - offset :]
         out /= shifts
         return out
     else:
