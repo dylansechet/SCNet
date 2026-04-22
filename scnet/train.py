@@ -1,4 +1,5 @@
 import os
+import warnings
 import torch
 from torch.utils.data import DataLoader
 from .wav import get_wav_datasets
@@ -50,6 +51,9 @@ def get_solver(args):
 
     train_set, valid_set = get_wav_datasets(config.data)
 
+    def _worker_init(worker_id):
+        warnings.filterwarnings("ignore", message=".*load_with_torchcodec.*", category=UserWarning)
+
     logger.info("train/valid set size: %d %d", len(train_set), len(valid_set))
     train_loader = DataLoader(
         train_set,
@@ -57,11 +61,16 @@ def get_solver(args):
         shuffle=True,
         num_workers=config.misc.num_workers,
         drop_last=True,
+        worker_init_fn=_worker_init,
     )
     train_loader = accelerator.prepare_data_loader(train_loader)
 
     valid_loader = DataLoader(
-        valid_set, batch_size=1, shuffle=False, num_workers=config.misc.num_workers
+        valid_set,
+        batch_size=1,
+        shuffle=False,
+        num_workers=config.misc.num_workers,
+        worker_init_fn=_worker_init,
     )
     valid_loader = accelerator.prepare_data_loader(valid_loader)
 
