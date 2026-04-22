@@ -8,7 +8,7 @@ from .loss import spec_rmse_loss
 from tqdm import tqdm
 from .log import logger
 from accelerate import Accelerator
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 
 
 def _summary(metrics):
@@ -24,7 +24,7 @@ class Solver(object):
         self.optimizer = optimizer
         self.device = next(iter(self.model.parameters())).device
         self.accelerator = Accelerator()
-        self.scaler = GradScaler()
+        self.scaler = GradScaler(self.device.type)
 
         win_size = config.model.win_size
         self.stft_config = {
@@ -193,13 +193,8 @@ class Solver(object):
                 break
 
     def _run_one_epoch(self, epoch, train=True):
-        config = self.config
         data_loader = self.loaders["train"] if train else self.loaders["valid"]
         data_loader.sampler.epoch = epoch
-
-        label = ["Valid", "Train"][train]
-        name = label + f" | Epoch {epoch + 1}"
-        total = len(data_loader)
 
         averager = EMA()
 
@@ -218,7 +213,7 @@ class Solver(object):
             if not train:
                 estimate = apply_model(self.model, mix, split=True, overlap=0)
             else:
-                with autocast():
+                with autocast(self.device.type):
                     estimate = self.model(mix)
 
             assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
