@@ -1,12 +1,13 @@
 # From HT demucs https://github.com/facebookresearch/demucs/tree/release_v4?tab=readme-ov-file
 
-from collections import OrderedDict
 import hashlib
+import json
 import logging
 import math
-import json
 import os
+from collections import OrderedDict
 from pathlib import Path
+
 import tqdm
 
 logger = logging.getLogger(__name__)
@@ -14,10 +15,10 @@ logger = logging.getLogger(__name__)
 import julius
 import torch as th
 import torchaudio as ta
+from accelerate import Accelerator
 from torch.nn import functional as F
 
 from .utils import convert_audio_channels
-from accelerate import Accelerator
 
 accelerator = Accelerator()
 
@@ -187,10 +188,10 @@ class Wavset:
 
 def get_wav_datasets(args):
     """Extract the wav datasets from the XP arguments."""
-    sig = hashlib.sha1(str(args.wav).encode()).hexdigest()[:8]
+    train_path = Path(args.train)
+    valid_path = Path(args.valid)
+    sig = hashlib.sha1((str(train_path) + str(valid_path)).encode()).hexdigest()[:8]
     metadata_file = Path(args.metadata) / ("wav_" + sig + ".json")
-    train_path = Path(args.wav) / "train"
-    valid_path = Path(args.wav) / "valid"
     if not metadata_file.is_file() and accelerator.is_main_process:
         metadata_file.parent.mkdir(exist_ok=True, parents=True)
         train = build_metadata(train_path, args.sources)

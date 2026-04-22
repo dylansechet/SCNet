@@ -1,5 +1,6 @@
 data:
-  wav: /path/to/musdbhq
+  train: /path/to/musdbhq/train
+  valid: /path/to/musdbhq/valid
   samplerate: 44100
   segment: 11
   shift: 0.5
