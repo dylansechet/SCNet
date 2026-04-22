@@ -2,11 +2,14 @@
 
 from collections import OrderedDict
 import hashlib
+import logging
 import math
 import json
 import os
 from pathlib import Path
 import tqdm
+
+logger = logging.getLogger(__name__)
 
 import julius
 import torch as th
@@ -32,7 +35,7 @@ def _track_metadata(track, sources, normalize=True, ext=EXT):
         try:
             info = ta.info(str(file))
         except RuntimeError:
-            print(file)
+            logger.error("Failed to read audio info: %s", file)
             raise
         length = info.num_frames
         if track_length is None:
@@ -50,7 +53,7 @@ def _track_metadata(track, sources, normalize=True, ext=EXT):
             try:
                 wav, _ = ta.load(str(file))
             except RuntimeError:
-                print(file)
+                logger.error("Failed to load audio file: %s", file)
                 raise
             wav = wav.mean(0)
             mean = wav.mean().item()

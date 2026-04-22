@@ -1,5 +1,6 @@
 from collections import defaultdict
 from contextlib import contextmanager
+import logging
 import os
 import tempfile
 import typing as tp
@@ -8,44 +9,45 @@ import torch
 import julius
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 # Audio
 def convert_audio_channels(wav, channels=2):
     """Convert audio to the given number of channels."""
-    # Debug info
-    print(f"DEBUG: Input tensor shape: {wav.shape}, ndim: {wav.ndim}, requested channels: {channels}")
-    
+    logger.debug("Input tensor shape: %s, ndim: %d, requested channels: %d", wav.shape, wav.ndim, channels)
+
     # Handle 1D arrays (samples only, no channel dimension)
     if wav.ndim == 1:
-        print("DEBUG: Handling 1D array (samples only)")
+        logger.debug("Handling 1D array (samples only)")
         wav = wav.unsqueeze(0)  # Add channel dimension [1, samples]
         src_channels = 1
     elif wav.ndim == 2:
         # Standard case: [channels, samples]
         src_channels = wav.shape[0]
-        print(f"DEBUG: 2D tensor with {src_channels} channels and {wav.shape[1]} samples")
+        logger.debug("2D tensor with %d channels and %d samples", src_channels, wav.shape[1])
     else:
         # Multi-dimensional case like [batch, channels, samples] or [sources, channels, samples]
         src_channels = wav.shape[-2]  # Assume channel dim is second to last
-        print(f"DEBUG: Multi-dim tensor with shape {wav.shape}, src_channels={src_channels}")
-    
+        logger.debug("Multi-dim tensor with shape %s, src_channels=%d", wav.shape, src_channels)
+
     # No change needed if already correct number of channels
     if src_channels == channels:
-        print("DEBUG: Channel count already correct")
+        logger.debug("Channel count already correct")
         return wav
-        
+
     # Convert to mono if requested (1 channel)
     if channels == 1:
         if src_channels > 1:
-            print("DEBUG: Converting to mono by averaging channels")
+            logger.debug("Converting to mono by averaging channels")
             if wav.ndim == 2:
                 return wav.mean(dim=0, keepdim=True)  # Average channels: [C, S] -> [1, S]
             else:
                 return wav.mean(dim=-2, keepdim=True)  # Keep original dimension structure
         return wav  # Already mono
-        
+
     # Handle mono to multi-channel expansion (upmixing from 1 channel)
     if src_channels == 1:
-        print("DEBUG: Expanding mono to multi-channel")
+        logger.debug("Expanding mono to multi-channel")
         if wav.ndim == 2:
             # Simple case: [1, samples] -> [channels, samples]
             return wav.expand(channels, wav.shape[1])
@@ -54,18 +56,18 @@ def convert_audio_channels(wav, channels=2):
             target_shape = list(wav.shape)
             target_shape[-2] = channels
             return wav.expand(*target_shape)
-    
+
     # Handle downmixing (more channels than needed)
     if src_channels > channels:
-        print(f"DEBUG: Downmixing from {src_channels} to {channels} channels")
+        logger.debug("Downmixing from %d to %d channels", src_channels, channels)
         if wav.ndim == 2:
             return wav[:channels]  # Take first N channels
         else:
             return wav.narrow(-2, 0, channels)  # Take first N channels in dim=-2
-    
+
     # Handle upmixing from multi-channel to more channels
-    print(f"DEBUG: Upmixing from {src_channels} to {channels} channels")
-    
+    logger.debug("Upmixing from %d to %d channels", src_channels, channels)
+
     # Process in batches to avoid memory issues
     if wav.ndim == 2:
         # 2D case: [src_channels, samples] -> [channels, samples]
@@ -77,13 +79,13 @@ def convert_audio_channels(wav, channels=2):
         # Instead, create and process it one batch at a time
         result_shape = list(wav.shape)
         result_shape[-2] = channels
-        
-        print(f"DEBUG: Creating result tensor with shape {result_shape}")
-        
+
+        logger.debug("Creating result tensor with shape %s", result_shape)
+
         # Check if tensor would be too large (arbitrary threshold of 1GB)
         tensor_size_bytes = torch.tensor([], dtype=wav.dtype).element_size() * np.prod(result_shape)
         if tensor_size_bytes > 1e9:  # 1GB
-            print(f"DEBUG: Large tensor detected ({tensor_size_bytes / 1e9:.2f} GB), processing in CPU")
+            logger.debug("Large tensor detected (%.2f GB), processing in CPU", tensor_size_bytes / 1e9)
             # Process on CPU to avoid GPU memory issues
             cpu_wav = wav.cpu()
             result = torch.zeros(result_shape, dtype=cpu_wav.dtype)

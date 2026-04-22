@@ -73,7 +73,7 @@ def main():
         os.makedirs(args.save_path)
 
     if not os.path.isfile(args.config_path):
-        print(f"Error: config file {args.config_path} does not exist.")
+        logger.error("Config file does not exist: %s", args.config_path)
         sys.exit(1)
         
     solver = get_solver(args)
