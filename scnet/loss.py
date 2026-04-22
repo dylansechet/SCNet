@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 
-def spec_rmse_loss(estimate, sources, stft_config):
+def spec_mse_loss(estimate, sources, stft_config):
 
     _, _, _, lenc = estimate.shape
     spec_estimate = estimate.view(-1, lenc)
@@ -21,6 +21,6 @@ def spec_rmse_loss(estimate, sources, stft_config):
     loss = F.mse_loss(spec_estimate, spec_sources, reduction="none")
 
     dims = tuple(range(2, loss.dim()))
-    loss = loss.mean(dims).sqrt().mean(dim=(0, 1))
+    loss = loss.mean(dims).mean(dim=(0, 1))
 
     return loss

@@ -4,7 +4,7 @@ from .utils import copy_state, EMA, new_sdr, make_window
 from .apply import apply_model
 from .ema import ModelEMA
 from . import augment
-from .loss import spec_rmse_loss
+from .loss import spec_mse_loss
 from tqdm import tqdm
 from .log import logger
 from accelerate import Accelerator
@@ -218,7 +218,7 @@ class Solver(object):
 
             assert estimate.shape == sources.shape, (estimate.shape, sources.shape)
 
-            loss = spec_rmse_loss(estimate, sources, self.stft_config)
+            loss = spec_mse_loss(estimate, sources, self.stft_config)
 
             losses = {}
 
