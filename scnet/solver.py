@@ -211,7 +211,8 @@ class Solver(object):
                 sources = sources[:, 1:]
 
             if not train:
-                estimate = apply_model(self.model, mix, split=True, overlap=0)
+                with torch.compiler.disable():
+                    estimate = apply_model(self.model, mix, split=True, overlap=0)
             else:
                 with autocast(self.device.type):
                     estimate = self.model(mix)
