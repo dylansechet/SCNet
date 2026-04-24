@@ -1,14 +1,18 @@
-import torch
 from pathlib import Path
-from .utils import copy_state, EMA, new_sdr, make_window
-from .apply import apply_model
-from .ema import ModelEMA
-from . import augment
-from .loss import spec_mse_loss
-from tqdm import tqdm
-from .log import logger
+
+import torch
 from accelerate import Accelerator
 from torch.amp import GradScaler, autocast
+from tqdm import tqdm
+
+from . import augment
+from .apply import apply_model
+from .ema import ModelEMA
+from .log import logger
+from .loss import spec_mse_loss
+from .utils import EMA, copy_state, make_window, new_sdr
+
+apply_model_eager = torch._dynamo.disable(apply_model)
 
 
 def _summary(metrics):
@@ -33,7 +37,9 @@ class Solver(object):
             "win_length": win_size,
             "center": True,
             "normalized": config.model.normalized,
-            "window": make_window(getattr(config.model, "window", "hann"), win_size, device=self.device),
+            "window": make_window(
+                getattr(config.model, "window", "hann"), win_size, device=self.device
+            ),
         }
         # Exponential moving average of the model
         self.emas = {"batch": [], "epoch": []}
@@ -211,8 +217,8 @@ class Solver(object):
                 sources = sources[:, 1:]
 
             if not train:
-                with torch.compiler.disable():
-                    estimate = apply_model(self.model, mix, split=True, overlap=0)
+                eager_model = self.model._orig_mod if hasattr(self.model, "_orig_mod") else self.model
+                estimate = apply_model_eager(eager_model, mix, split=True, overlap=0)
             else:
                 with autocast(self.device.type):
                     estimate = self.model(mix)
@@ -243,7 +249,7 @@ class Solver(object):
                     for p in self.model.parameters()
                     if p.grad is not None
                 )
-                losses["grad"] = grad_norm ** 0.5
+                losses["grad"] = grad_norm**0.5
 
                 self.scaler.step(self.optimizer)
                 self.scaler.update()

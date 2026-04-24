@@ -52,7 +52,9 @@ def get_solver(args):
     train_set, valid_set = get_wav_datasets(config.data)
 
     def _worker_init(worker_id):
-        warnings.filterwarnings("ignore", message=".*load_with_torchcodec.*", category=UserWarning)
+        warnings.filterwarnings(
+            "ignore", message=".*load_with_torchcodec.*", category=UserWarning
+        )
 
     logger.info("train/valid set size: %d %d", len(train_set), len(valid_set))
     train_loader = DataLoader(
