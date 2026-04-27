@@ -155,7 +155,7 @@ class Solver(object):
 
             metrics["train"] = self._run_one_epoch(epoch)
             formatted = self._format_train(metrics["train"])
-            logger.info(f"Train Summary | Epoch {epoch + 1} | {_summary(formatted)}")
+            logger.info(f"Train Summary | Epoch {epoch + 1} | {_summary(formatted)} | GradScaler scale=%.0f", self.scaler.get_scale())
 
             # Cross validation
             logger.info("-" * 70)
@@ -250,6 +250,18 @@ class Solver(object):
                     if p.grad is not None
                 )
                 losses["grad"] = grad_norm**0.5
+
+                if not torch.isfinite(losses["grad"]):
+                    logger.warning(
+                        "Epoch %d batch %d: non-finite grad norm. "
+                        "mix: min=%.3f max=%.3f std=%.3f. loss=%.6f. scaler_scale=%.0f",
+                        epoch, idx,
+                        mix.min(), mix.max(), mix.std(),
+                        losses["loss"], self.scaler.get_scale(),
+                    )
+                    for name, p in self.model.named_parameters():
+                        if p.grad is not None and not torch.isfinite(p.grad).all():
+                            logger.warning("  non-finite grad in: %s", name)
 
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
