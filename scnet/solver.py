@@ -28,7 +28,13 @@ class Solver(object):
         self.optimizer = optimizer
         self.device = next(iter(self.model.parameters())).device
         self.accelerator = Accelerator()
-        self.scaler = GradScaler(self.device.type)
+        fp16 = self.accelerator.mixed_precision == "fp16"
+        self.scaler = GradScaler(self.device.type, enabled=fp16)
+        logger.info(
+            "Mixed precision: %s. GradScaler %s.",
+            self.accelerator.mixed_precision,
+            "enabled" if fp16 else "disabled",
+        )
 
         win_size = config.model.win_size
         self.stft_config = {
@@ -155,7 +161,14 @@ class Solver(object):
 
             metrics["train"] = self._run_one_epoch(epoch)
             formatted = self._format_train(metrics["train"])
-            logger.info(f"Train Summary | Epoch {epoch + 1} | {_summary(formatted)} | GradScaler scale=%.0f", self.scaler.get_scale())
+            scale_info = (
+                f" | GradScaler scale={self.scaler.get_scale():.0f}"
+                if self.scaler.is_enabled()
+                else ""
+            )
+            logger.info(
+                f"Train Summary | Epoch {epoch + 1} | {_summary(formatted)}{scale_info}"
+            )
 
             # Cross validation
             logger.info("-" * 70)
@@ -217,7 +230,11 @@ class Solver(object):
                 sources = sources[:, 1:]
 
             if not train:
-                eager_model = self.model._orig_mod if hasattr(self.model, "_orig_mod") else self.model
+                eager_model = (
+                    self.model._orig_mod
+                    if hasattr(self.model, "_orig_mod")
+                    else self.model
+                )
                 estimate = apply_model_eager(eager_model, mix, split=True, overlap=0)
             else:
                 with autocast(self.device.type):
@@ -254,10 +271,16 @@ class Solver(object):
                 if not torch.isfinite(losses["grad"]):
                     logger.warning(
                         "Epoch %d batch %d: non-finite grad norm. "
-                        "mix: min=%.3f max=%.3f std=%.3f. loss=%.6f. scaler_scale=%.0f",
-                        epoch, idx,
-                        mix.min(), mix.max(), mix.std(),
-                        losses["loss"], self.scaler.get_scale(),
+                        "mix: min=%.3f max=%.3f std=%.3f. loss=%.6f%s",
+                        epoch,
+                        idx,
+                        mix.min(),
+                        mix.max(),
+                        mix.std(),
+                        losses["loss"],
+                        f". scaler_scale={self.scaler.get_scale():.0f}"
+                        if self.scaler.is_enabled()
+                        else "",
                     )
                     for name, p in self.model.named_parameters():
                         if p.grad is not None and not torch.isfinite(p.grad).all():
