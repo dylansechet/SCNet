@@ -268,6 +268,10 @@ class Solver(object):
                 )
                 losses["grad"] = grad_norm**0.5
 
+                clip = getattr(self.config.optim, "clip_grad")
+                if clip is not None:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip)
+
                 if not torch.isfinite(losses["grad"]):
                     logger.warning(
                         "Epoch %d batch %d: non-finite grad norm. "
